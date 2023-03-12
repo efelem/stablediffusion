@@ -264,7 +264,44 @@ class HybridConditioner(nn.Module):
         return {'c_concat': [c_concat], 'c_crossattn': [c_crossattn]}
 
 
-def noise_like(shape, device, repeat=False):
-    repeat_noise = lambda: torch.randn((1, *shape[1:]), device=device).repeat(shape[0], *((1,) * (len(shape) - 1)))
-    noise = lambda: torch.randn(shape, device=device)
-    return repeat_noise() if repeat else noise()
+def noise_like(shape, device, repeat=False, target_index=-1, original_batch_size=None):
+    """
+    Generates noise of a given shape with a specified device.
+
+    Args:
+        shape (tuple): The shape of the noise tensor.
+        device (torch.device): The device on which to generate the noise tensor.
+        repeat (bool): Whether to repeat the same noise across the batch dimension.
+        target_index (int): The index of the image in the batch for which to generate noise. Default: -1 (generate noise for the entire batch).
+        original_batch_size (int): The original batch size before sampling from DDIM. This argument is only used if target_index is specified and batch size is 1. Default: None.
+
+    Returns:
+        torch.Tensor: The generated noise tensor.
+
+    Raises:
+        ValueError: If target_index is specified and batch size is greater than 1.
+        ValueError: If target_index is greater than or equal to the batch size.
+    """
+
+    # Generate noise for the entire batch as before if target_index is not specified
+    if target_index == -1:
+        repeat_noise = lambda: torch.randn((1, *shape[1:]), device=device).repeat(shape[0], *((1,) * (len(shape) - 1)))
+        noise = lambda: torch.randn(shape, device=device)
+        return repeat_noise() if repeat else noise()
+
+    # Generate noise for a specific image in the batch if batch size is 1
+    elif shape[0] == 1:
+        # Repeat noise for the entire batch but generate separate noise for each image
+        repeat_noise = lambda: torch.randn((1, *shape[1:]), device=device).repeat(original_batch_size, *((1,) * (len(shape) - 1)))
+
+        # Generate noise for the entire batch and return only the noise for the specified index
+        new_shape = shape.copy()
+        new_shape[0] = original_batch_size
+        noise = lambda: torch.randn(new_shape, device=device)
+        if target_index >= original_batch_size:
+            raise ValueError("target_index must be less than the original batch size")
+        return noise()[target_index, :].unsqueeze(0)
+
+    # Raise an error if target_index is specified and batch size is greater than 1
+    else:
+        raise ValueError("You cannot have target_index set when batch_size > 1")

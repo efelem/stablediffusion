@@ -199,6 +199,22 @@ def parse_args():
         action='store_true',
         help="Use bfloat16",
     )
+    parser.add_argument(
+        '--original_batch_size',
+        type=int,
+        default=None,
+        help='Original batch size before sampling from DDIM'
+    )
+    parser.add_argument(
+        '--target_index',
+        type=int,
+        default=-1,
+        help='Index of the image in the batch for which to generate noise. Default: -1 (generate noise for the entire batch)'
+    )
+
+
+
+    
     opt = parser.parse_args()
     return opt
 
@@ -352,7 +368,9 @@ def main(opt):
                                                      unconditional_guidance_scale=opt.scale,
                                                      unconditional_conditioning=uc,
                                                      eta=opt.ddim_eta,
-                                                     x_T=start_code)
+                                                     x_T=start_code,
+                                                     target_index=opt.target_index,
+                                                     original_batch_size=opt.original_batch_size)
 
                     x_samples = model.decode_first_stage(samples)
                     x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)

@@ -76,6 +76,8 @@ class DDIMSampler(object):
                unconditional_conditioning=None, # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...
                dynamic_threshold=None,
                ucg_schedule=None,
+               target_index=-1,
+               original_batch_size=None,
                **kwargs
                ):
         if conditioning is not None:
@@ -116,7 +118,9 @@ class DDIMSampler(object):
                                                     unconditional_guidance_scale=unconditional_guidance_scale,
                                                     unconditional_conditioning=unconditional_conditioning,
                                                     dynamic_threshold=dynamic_threshold,
-                                                    ucg_schedule=ucg_schedule
+                                                    ucg_schedule=ucg_schedule,
+                                                    target_index=-1,
+                                                    original_batch_size=None,
                                                     )
         return samples, intermediates
 
@@ -127,7 +131,7 @@ class DDIMSampler(object):
                       mask=None, x0=None, img_callback=None, log_every_t=100,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
                       unconditional_guidance_scale=1., unconditional_conditioning=None, dynamic_threshold=None,
-                      ucg_schedule=None):
+                      ucg_schedule=None, target_index=-1, original_batch_size=None):
         device = self.model.betas.device
         b = shape[0]
         if x_T is None:
@@ -167,7 +171,7 @@ class DDIMSampler(object):
                                       corrector_kwargs=corrector_kwargs,
                                       unconditional_guidance_scale=unconditional_guidance_scale,
                                       unconditional_conditioning=unconditional_conditioning,
-                                      dynamic_threshold=dynamic_threshold)
+                                      dynamic_threshold=dynamic_threshold, target_index=-1,original_batch_size=None)
             img, pred_x0 = outs
             if callback: callback(i)
             if img_callback: img_callback(pred_x0, i)
@@ -182,7 +186,7 @@ class DDIMSampler(object):
     def p_sample_ddim(self, x, c, t, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
                       unconditional_guidance_scale=1., unconditional_conditioning=None,
-                      dynamic_threshold=None):
+                      dynamic_threshold=None,target_index=-1,original_batch_size=None):
         b, *_, device = *x.shape, x.device
 
         if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
@@ -245,7 +249,7 @@ class DDIMSampler(object):
 
         # direction pointing to x_t
         dir_xt = (1. - a_prev - sigma_t**2).sqrt() * e_t
-        noise = sigma_t * noise_like(x.shape, device, repeat_noise) * temperature
+        noise = sigma_t * noise_like(x.shape, device, repeat_noise, target_index=-1, original_batch_size=None) * temperature
         if noise_dropout > 0.:
             noise = torch.nn.functional.dropout(noise, p=noise_dropout)
         x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
